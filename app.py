@@ -347,22 +347,20 @@ def build_insights(d, unit, last_date, today):
         out.append(("💰", col,
             f"<b>매출 {_sig(rev_p)}</b> ({int(prev['매출']):,}→{int(cur['매출']):,}): {lead}{tail}."))
 
-    # 2) 블로그 유입 → 성과 연결 (초기 구간은 %가 과장되므로 절대값)
+    # 2) 블로그 유입 — 외부 블로그 지표. 자사몰 매출과의 직접 인과는 추적 불가(클릭 태그 없음)
+    #    → 사실만 전하고 '매출로 이어졌다/아니다' 같은 판단은 하지 않는다.
     bc, bp = cur["블로그방문자"], prev["블로그방문자"]
     if bc >= 3000 or bp >= 3000:
-        if bp >= 3000:                       # 비교 가능한 규모 → % 사용
+        if bp >= 3000:
             blog_p = _pc(bc, bp)
-            if blog_p is not None and blog_p > 10 and (cr_p is None or cr_p <= 2):
-                out.append(("🔎", "#B8860B",
-                    f"블로그 방문자는 {_sig(blog_p)} 늘었지만 전환율은 "
-                    f"{prev['전환율']:.1f}%→{cur['전환율']:.1f}%로 나아지지 않았습니다 — "
-                    f"<b>유입이 아직 매출로 뚜렷이 이어지진 않았습니다</b>. 유입→구매 경로 점검."))
-            elif blog_p is not None and abs(blog_p) >= 10:
+            if blog_p is not None and abs(blog_p) >= 10:
                 out.append(("🔎", "#3D3B38",
-                    f"블로그 방문자 {int(bp):,}→{int(bc):,}명({_sig(blog_p)})."))
+                    f"블로그 방문자 {int(bp):,}→{int(bc):,}명({_sig(blog_p)}). "
+                    f"외부 블로그 유입이라 자사몰 매출과의 직접 연결은 추적되지 않습니다 — 노출 지표로만 참고."))
         else:                                # 직전이 초기 시작 구간
             out.append(("🔎", "#3D3B38",
-                f"블로그 방문자 {int(bp):,}→{int(bc):,}명으로 확대(직전은 시작 초기라 %는 생략)."))
+                f"블로그 방문자 {int(bp):,}→{int(bc):,}명으로 확대(직전은 시작 초기라 %는 생략). "
+                f"자사몰 매출과의 직접 연결은 추적 불가 — 노출 지표로 참고."))
 
     # 3) 재구매율 점검 — 분모(식별주문)와 분자(재구매 건수)를 함께 본다 ★사용자 요청
     rr_p = _pc(cur["재구매주문율"], prev["재구매주문율"])
