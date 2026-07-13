@@ -129,9 +129,17 @@ def load():
         ev = pd.read_sql_query("SELECT 날짜,구분,채널,내용 FROM marketing_events ORDER BY 날짜", conn)
     except Exception:
         ev = pd.DataFrame(columns=["날짜", "구분", "채널", "내용"])
+    # 반품·취소 (웰바이오젠 카페24만) — 이 대시보드는 웰바이오젠 전용
+    try:
+        rr = pd.read_sql_query(
+            "SELECT 년,월,구매건수,반품건수,COALESCE(취소건수,0) AS 취소건수 "
+            "FROM monthly_returns WHERE 채널='카페24' AND 브랜드='웰바이오젠' "
+            "ORDER BY 년,월", conn)
+    except Exception:
+        rr = pd.DataFrame(columns=["년", "월", "구매건수", "반품건수", "취소건수"])
     conn.close()
     dp["날짜"] = pd.to_datetime(dp["날짜"])
-    return dp, rt, ev
+    return dp, rt, ev, rr
 
 
 def bucket_key(ts, unit):
@@ -202,7 +210,7 @@ with st.sidebar:
     st.caption("데이터 갱신: 광고일지 폴더에서\n`python build_performance.py`")
 
 try:
-    dp, rt, ev = load()
+    dp, rt, ev, rr = load()
 except Exception as e:
     st.error(f"DB 연결 실패: {e}"); st.stop()
 if dp.empty:
@@ -297,15 +305,15 @@ if not evs.empty:
 st.markdown(f'<div class="section-title">{unit}별 지표</div>', unsafe_allow_html=True)
 rows = ""
 for _, r in d.iloc[::-1].iterrows():          # 최근이 위로
-    rr = float(r["재구매주문율"])
-    rc = "#2F7D4A" if rr >= 10 else "#2D2B28"
+    _rpr = float(r["재구매주문율"])
+    rc = "#2F7D4A" if _rpr >= 10 else "#2D2B28"
     rows += (f"<tr><td>{r['구간']}</td>"
              f"<td>{int(r['방문자']):,}</td><td>{int(r['주문']):,}</td>"
              f"<td style='font-weight:600;'>{r['전환율']:.2f}%</td>"
              f"<td>₩{int(r['매출']):,}</td><td>₩{int(r['광고비']):,}</td>"
              f"<td>₩{int(r['기타광고비']):,}</td><td>₩{int(r['총마케팅비']):,}</td>"
              f"<td>{fmt_roas(r['roas'])}</td>"
-             f"<td style='font-weight:700;color:{rc};'>{rr:.2f}%</td>"
+             f"<td style='font-weight:700;color:{rc};'>{_rpr:.2f}%</td>"
              f"<td>{int(r['검색량']):,}</td><td>{int(r['블로그방문자']):,}</td></tr>")
 head = "".join(f"<th>{h}</th>" for h in
                ["방문자", "주문", "전환율", "매출", "광고비", "기타광고비", "총마케팅비",
@@ -424,3 +432,51 @@ if not rt.empty:
                 unsafe_allow_html=True)
     st.caption("※ 웰바이오젠(카페24) 주문만. 고객 식별은 주문자 휴대폰 기준(수령자 아님). "
                "위 월별 재구매율은 해당 기간 주문 기준이고, 이 표는 전체 주문 이력 기준이라 값이 다르다.")
+
+# ── 반품 · 취소 (웰바이오젠) ───────────────────
+st.markdown('<div class="section-title">반품 · 취소 (웰바이오젠 카페24)</div>',
+            unsafe_allow_html=True)
+if rr is None or rr.empty:
+    st.caption("반품 데이터가 아직 없습니다. (광고일지 폴더의 로컬 동기화에서 수집됩니다)")
+else:
+    _rr = rr.copy()
+    _rr["ym"] = (_rr["년"].astype(int).astype(str) + "-"
+                 + _rr["월"].astype(int).map(lambda m: f"{m:02d}"))
+    _lo, _hi = f"{d_from:%Y-%m}", f"{d_to:%Y-%m}"     # 선택 기간에 걸치는 달만
+    _rr = _rr[(_rr["ym"] >= _lo) & (_rr["ym"] <= _hi)].sort_values("ym")
+    if _rr.empty:
+        st.caption("선택 기간에 반품 데이터가 없습니다.")
+    else:
+        _rr["반품률"] = (_rr["반품건수"] / _rr["구매건수"].where(_rr["구매건수"] > 0) * 100)
+        _rows = ""
+        for _, r in _rr[::-1].iterrows():
+            _rt = r["반품률"]
+            _rc = "#B1442F" if (pd.notna(_rt) and _rt >= 5) else "#2D2B28"
+            _rows += (f"<tr><td>{r['ym']}</td>"
+                      f"<td>{int(r['구매건수']):,}</td>"
+                      f"<td>{int(r['반품건수']):,}</td>"
+                      f"<td style='font-weight:700;color:{_rc};'>"
+                      f"{'—' if pd.isna(_rt) else f'{_rt:.1f}%'}</td>"
+                      f"<td style='color:#8C8680;'>{int(r['취소건수']):,}</td></tr>")
+        _tb = int(_rr["반품건수"].sum()); _tt = int(_rr["구매건수"].sum())
+        _tc = int(_rr["취소건수"].sum())
+        _trate = _tb / _tt * 100 if _tt else 0
+        _head = "".join(f"<th>{h}</th>" for h in ["구매", "반품", "반품률", "취소"])
+        _ct, _cc = st.columns([1, 1])
+        with _ct:
+            st.markdown(
+                f"<div style='overflow-x:auto;'><table class='dt'>"
+                f"<thead><tr><th>월</th>{_head}</tr></thead><tbody>{_rows}"
+                f"<tr style='border-top:2px solid #E0DBD2;font-weight:700;'>"
+                f"<td>합계</td><td>{_tt:,}</td><td>{_tb:,}</td><td>{_trate:.1f}%</td>"
+                f"<td style='color:#8C8680;'>{_tc:,}</td></tr>"
+                f"</tbody></table></div>", unsafe_allow_html=True)
+        with _cc:
+            _f = go.Figure(go.Bar(x=_rr["ym"], y=_rr["반품률"].round(1), marker_color="#D97757",
+                                  hovertemplate="%{x}<br>반품률 %{y:.1f}%<extra></extra>"))
+            _f = theme(_f)
+            _f.update_layout(height=280, margin=dict(l=10, r=10, t=20, b=10),
+                             yaxis=dict(title="반품률 (%)", ticksuffix="%", gridcolor="#E8E4DE"))
+            st.plotly_chart(_f, use_container_width=True)
+        st.caption("반품 = 배송 후 실제 반품(반품완료) · 취소 = 결제 후 배송 전 취소. "
+                   "입금전취소(미결제)는 구매·반품·취소 모두 제외. 반품률 = 반품 ÷ 구매.")
