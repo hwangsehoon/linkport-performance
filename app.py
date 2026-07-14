@@ -401,7 +401,10 @@ def build_insights(d, unit, last_date, today):
 
 
 st.markdown('<div class="section-title">자동 점검 · 피드백</div>', unsafe_allow_html=True)
-_today_kst = pd.Timestamp.now(tz="Asia/Seoul").date()   # 배포(UTC) 서버에서도 한국 날짜 기준
+# 배포(UTC) 서버엔 시간대 DB(tzdata)가 없어 tz="Asia/Seoul"이 죽을 수 있다.
+# UTC에 +9시간을 더해 한국 날짜를 구하면 tzdata 없이도 안전하다.
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+_today_kst = (_dt.now(_tz.utc) + _td(hours=9)).date()
 _ins = build_insights(d, unit, _max, _today_kst)
 _items = "".join(
     f"<div style='display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #EFEDE9;'>"
