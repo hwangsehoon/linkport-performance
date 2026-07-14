@@ -554,6 +554,8 @@ with c4:
 if not rt.empty:
     st.markdown('<div class="section-title">재구매 타이밍 (첫 구매 → 두 번째 구매)</div>',
                 unsafe_allow_html=True)
+    st.caption("‘30·90·180일내’는 **재구매한 고객 중** 그 기간 안에 두 번째 구매를 한 비율입니다"
+               " — 전체 고객 기준이 아닙니다. (실제 재구매 비율은 왼쪽 ‘재구매율’ 열)")
     tr = ""
     for _, r in rt.sort_values("재구매율", ascending=False).iterrows():
         tr += (f"<tr><td>{r['구분']}</td><td>{int(r['고객']):,}</td><td>{int(r['재구매']):,}</td>"
@@ -566,8 +568,11 @@ if not rt.empty:
     st.markdown(f"<div style='overflow-x:auto;'><table class='dt'>"
                 f"<thead><tr><th>구분</th>{th}</tr></thead><tbody>{tr}</tbody></table></div>",
                 unsafe_allow_html=True)
-    st.caption("※ 웰바이오젠(카페24) 주문만. 고객 식별은 주문자 휴대폰 기준(수령자 아님). "
-               "위 월별 재구매율은 해당 기간 주문 기준이고, 이 표는 전체 주문 이력 기준이라 값이 다르다.")
+    st.caption("※ 웰바이오젠(카페24) 주문만 · 고객 식별은 주문자 휴대폰 기준(수령자 아님). "
+               "위 월별 재구매율은 해당 기간 주문 기준, 이 표는 전체 주문 이력 기준이라 값이 다름.")
+    st.caption("⚠ 주문 이력이 아직 ~9개월(2025-10~)뿐이라, **180일보다 긴 재구매 간격은 관측되지 않습니다**. "
+               "그래서 ‘180일내’가 100%로 보이는 것은 착시에 가깝습니다 — 늦게 재구매할 고객은 아직 집계 전. "
+               "데이터가 쌓이면 재구매율은 오르고 이 100%는 내려갑니다.")
 
 # ── 반품 · 취소 (웰바이오젠) ───────────────────
 st.markdown('<div class="section-title">반품 · 취소 (웰바이오젠 카페24)</div>',
